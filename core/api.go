@@ -3,6 +3,8 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,7 +43,10 @@ func (n *Node) apiHandler() http.Handler {
 	mux.HandleFunc("GET /api/status", func(w http.ResponseWriter, r *http.Request) {
 		n.mu.Lock()
 		defer n.mu.Unlock()
-		writeJSONResponse(w, map[string]any{"deviceID": n.cfg.DeviceID, "deviceName": n.cfg.DeviceName, "nameSet": n.cfg.NameSet, "peerPort": n.opts.PeerPort})
+		writeJSONResponse(w, map[string]any{
+			"deviceID": n.cfg.DeviceID, "deviceName": n.cfg.DeviceName, "nameSet": n.cfg.NameSet,
+			"peerPort": n.opts.PeerPort, "addresses": localAddrs(n.opts.PeerPort),
+		})
 	})
 	mux.HandleFunc("PUT /api/status", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ DeviceName string }
@@ -88,9 +93,28 @@ func (n *Node) apiHandler() http.Handler {
 			return
 		}
 		d.ID, d.Name, d.Addr = strings.ToUpper(strings.TrimSpace(d.ID)), strings.TrimSpace(d.Name), strings.TrimSpace(d.Addr)
+		if d.Addr != "" {
+			if _, _, err := net.SplitHostPort(d.Addr); err != nil {
+				d.Addr = net.JoinHostPort(d.Addr, "22000") // just an IP: use the default port
+			}
+		}
 		if d.ID == "" {
-			httpError(w, errors.New("device ID is required"))
-			return
+			// Added by address only: ask the device who it is. Our request also tells it about us,
+			// so this device shows up on the other one right away.
+			if d.Addr == "" {
+				httpError(w, errors.New("enter the other device's address (or its device ID)"))
+				return
+			}
+			var a announcement
+			if err := n.peerGetJSON(d.Addr, "/peer/hello", &a); err != nil || a.Magic != discoveryMagic {
+				httpError(w, fmt.Errorf("couldn't reach LanSync at %s. Check the address and that LanSync is running there", d.Addr))
+				return
+			}
+			d.ID = a.ID
+			if d.Name == "" {
+				d.Name = a.Name
+			}
+			n.markSeen(a.ID, a.Name, d.Addr)
 		}
 		n.mu.Lock()
 		if d.ID == n.cfg.DeviceID {

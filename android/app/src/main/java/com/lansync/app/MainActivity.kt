@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -88,6 +89,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.net.Inet4Address
 import java.time.Duration
 import java.time.Instant
 
@@ -492,6 +494,11 @@ private fun DevicesScreen(ui: UiState, onRename: () -> Unit, onAddDiscovered: (A
                         Text("This device", color = Color(0xFFB8C2D6), fontSize = 12.sp)
                         Text(me.deviceName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         Text(me.deviceID, color = Color(0xFFCFD6E4), fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                        val addrs = remember(me.peerPort) { localAddresses(context, me.peerPort) }
+                        if (addrs.isNotEmpty()) {
+                            Text("To add this phone on another device, enter:", color = Color(0xFFB8C2D6), fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                            Text(addrs.joinToString("  or  "), color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                             TextButton(onClick = onRename) { Text("Rename", color = Color.White) }
                             TextButton(onClick = { copy(context, me.deviceID) }) { Text("Copy ID", color = Color.White) }
@@ -599,20 +606,34 @@ private fun DeviceDialog(initial: Api.Device, onDismiss: () -> Unit, onSave: (St
     var id by remember { mutableStateOf(initial.id) }
     var name by remember { mutableStateOf(initial.name) }
     var addr by remember { mutableStateOf(initial.addr) }
+    var byId by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add device") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(id, { id = it }, label = { Text("Device ID") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(addr, { addr = it }, label = { Text("Address (optional)") }, placeholder = { Text("192.168.1.20:22000") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("Only needed if the device isn't discovered automatically.", fontSize = 12.sp, color = Color.Gray)
+                Text("Enter the address shown on the other device's Devices page. Its ID and name are filled in automatically.", fontSize = 13.sp, color = Color.DarkGray)
+                OutlinedTextField(addr, { addr = it }, label = { Text("Address") }, placeholder = { Text("192.168.1.20:22000") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(name, { name = it }, label = { Text("Name (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (byId) {
+                    OutlinedTextField(id, { id = it }, label = { Text("Device ID") }, modifier = Modifier.fillMaxWidth())
+                } else {
+                    TextButton(onClick = { byId = true }) { Text("Add by device ID instead") }
+                }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(id, name, addr) }, enabled = id.isNotBlank()) { Text("Add") } },
+        confirmButton = { TextButton(onClick = { onSave(id, name, addr) }, enabled = id.isNotBlank() || addr.isNotBlank()) { Text("Add") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/** This phone's LAN addresses ("ip:port"); Go can't list network interfaces on newer Android. */
+private fun localAddresses(context: Context, port: Int): List<String> {
+    val cm = context.getSystemService(ConnectivityManager::class.java) ?: return emptyList()
+    val props = cm.getLinkProperties(cm.activeNetwork) ?: return emptyList()
+    return props.linkAddresses.map { it.address }
+        .filter { it is Inet4Address && !it.isLoopbackAddress && !it.isLinkLocalAddress }
+        .map { "${it.hostAddress}:$port" }
 }
 
 /** Converts a folder picked with the system picker ("primary:DCIM/Camera") into a file path the Go core can use. */

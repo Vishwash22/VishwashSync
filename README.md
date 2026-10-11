@@ -25,7 +25,7 @@ installing from unknown sources.
 - Each device runs the same Go core. On desktop it's a background program with a web UI at
   `http://127.0.0.1:8384`; on Android it runs inside the app as a foreground service.
 - Devices find each other with a UDP broadcast on the local network (port 21027). If discovery is
-  blocked you can type a device's address (`192.168.1.20:22000`) when adding it.
+  blocked, add a device by its address (`192.168.1.20:22000`), shown on its Devices page.
 - Files are transferred over plain HTTP between devices (port 22000), whole files at a time.
 - Nothing happens automatically: press **Sync now** on a folder. That rescans the folder, pulls
   changes from every device it's shared with, then asks those devices to sync too and waits
@@ -73,7 +73,9 @@ notifications and **All files access** (needed to sync arbitrary folders).
 1. Start LanSync on two devices on the same Wi-Fi. The first time, give each a name you'll
    recognise (e.g. "Vishwash's laptop"); you can change it later with **Rename**. Other devices
    pick up the new name automatically.
-2. On each, open **Devices** and add the other one (it shows up under *Discovered*, or add it by ID).
+2. On each, open **Devices** and add the other one. It shows up under *Discovered*; if discovery is
+   blocked on your network, click **Add device** and enter the address the other device shows on its
+   Devices page (e.g. `192.168.1.20:22010`) — the ID and name are filled in automatically.
 3. On one device, **Add folder**, pick the mode and tick the other device under *Share with*.
 4. The other device shows "*X wants to share …*" — accept it, choose a local path and mode.
 5. Press **Sync now**.

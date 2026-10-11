@@ -115,3 +115,25 @@ func broadcastAddrs() []net.IP {
 	}
 	return out
 }
+
+// localAddrs lists this device's LAN addresses ("ip:port") for the user to type on another device.
+// It can be empty on Android, where the app finds the address itself.
+func localAddrs(port int) []string {
+	out := []string{}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return out
+	}
+	for _, ifc := range ifaces {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil && !ipn.IP.IsLinkLocalUnicast() {
+				out = append(out, net.JoinHostPort(ipn.IP.String(), strconv.Itoa(port)))
+			}
+		}
+	}
+	return out
+}

@@ -136,6 +136,9 @@ async function refresh() {
     $("#me-name").textContent = me.deviceName;
     $("#me-id").textContent = me.deviceID;
     $("#me-port").textContent = `port ${me.peerPort}`;
+    $("#my-addr").innerHTML = me.addresses?.length
+      ? `To add this device on another one, enter: ${me.addresses.map((a) => `<code>${esc(a)}</code>`).join(" or ")}`
+      : "";
     renderFolders();
     renderDevices();
     const log = await api("GET", "/api/log");

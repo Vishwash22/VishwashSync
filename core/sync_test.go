@@ -423,3 +423,34 @@ func TestFolderStatsSurviveRestart(t *testing.T) {
 		t.Errorf("after restart status = %+v, want 2 files, 8 bytes, last sync just now", s)
 	}
 }
+
+// When discovery is blocked, a device can be added by address alone: the ID and name are looked
+// up, and the other device immediately sees this one.
+func TestAddDeviceByAddressOnly(t *testing.T) {
+	pc, phone := startPeer(t, "PC"), startPeer(t, "Phone")
+	phone.api(t, "POST", "/api/devices", map[string]string{"addr": fmt.Sprintf("127.0.0.1:%d", pc.port)}, nil)
+
+	var devs struct {
+		Known      []struct{ ID, Name, Addr string }
+		Discovered []struct{ ID, Name string }
+	}
+	phone.api(t, "GET", "/api/devices", nil, &devs)
+	if len(devs.Known) != 1 || devs.Known[0].ID != pc.node.DeviceID() || devs.Known[0].Name != "PC" {
+		t.Fatalf("phone's devices = %+v, want PC with its ID", devs.Known)
+	}
+	pc.api(t, "GET", "/api/devices", nil, &devs)
+	if len(devs.Discovered) != 1 || devs.Discovered[0].ID != phone.node.DeviceID() {
+		t.Errorf("PC should see the phone under discovered, got %+v", devs.Discovered)
+	}
+
+	// A wrong address gives a clear error instead of adding a bogus device.
+	b, _ := json.Marshal(map[string]string{"addr": fmt.Sprintf("127.0.0.1:%d", freePort(t))})
+	resp, err := http.Post(phone.node.APIURL()+"/api/devices", "application/json", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("unreachable address: status %d, want 400", resp.StatusCode)
+	}
+}
