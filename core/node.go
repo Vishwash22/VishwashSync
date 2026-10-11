@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -24,6 +25,9 @@ type Options struct {
 	PeerPort      int    // LAN peer API port, default 22000
 	DiscoveryPort int    // UDP discovery port, default 21027; -1 disables discovery
 	UI            fs.FS  // optional static web UI served at "/"
+	// APIFallback lets the local API move to the next free port if APIAddr is busy. The Android app
+	// leaves it off because it connects to a fixed address.
+	APIFallback bool
 }
 
 // Node is one running LanSync instance.
@@ -98,11 +102,19 @@ func New(opts Options) (*Node, error) {
 
 // Start opens the peer API, the local API and discovery.
 func (n *Node) Start() error {
-	peerLn, err := net.Listen("tcp", fmt.Sprintf(":%d", n.opts.PeerPort))
+	// Peers learn our port from discovery and request headers, so any free port works.
+	peerLn, err := n.listen("", n.opts.PeerPort, true)
 	if err != nil {
 		return fmt.Errorf("peer port: %w", err)
 	}
-	apiLn, err := net.Listen("tcp", n.opts.APIAddr)
+	n.opts.PeerPort = peerLn.Addr().(*net.TCPAddr).Port
+	host, port, err := net.SplitHostPort(n.opts.APIAddr)
+	if err != nil {
+		peerLn.Close()
+		return fmt.Errorf("API address: %w", err)
+	}
+	p, _ := strconv.Atoi(port)
+	apiLn, err := n.listen(host, p, n.opts.APIFallback)
 	if err != nil {
 		peerLn.Close()
 		return fmt.Errorf("API address: %w", err)
@@ -118,6 +130,28 @@ func (n *Node) Start() error {
 	}
 	n.logf("LanSync started: device %s (%s), peer port %d, UI %s", n.cfg.DeviceName, n.cfg.DeviceID, n.opts.PeerPort, n.apiURL)
 	return nil
+}
+
+// listen opens a TCP listener on host:port. With fallback, a busy port makes it try the next ones.
+func (n *Node) listen(host string, port int, fallback bool) (net.Listener, error) {
+	tries := 1
+	if fallback && port != 0 {
+		tries = 20
+	}
+	var firstErr error
+	for i := 0; i < tries; i++ {
+		ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port+i)))
+		if err == nil {
+			if i > 0 {
+				n.logf("port %d is in use, using %d instead", port, port+i)
+			}
+			return ln, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return nil, firstErr
 }
 
 // Stop shuts the node down and cancels running transfers.

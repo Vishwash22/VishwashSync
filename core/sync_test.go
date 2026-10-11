@@ -258,3 +258,31 @@ func TestReceiveOnlyKeepsLocalChangesLocal(t *testing.T) {
 		t.Errorf("desktop edit reverted: %q", got)
 	}
 }
+
+// A port already used by another program must not stop LanSync from starting.
+func TestBusyPeerPortFallsBack(t *testing.T) {
+	busy, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Close()
+	port := busy.Addr().(*net.TCPAddr).Port
+	n, err := core.New(core.Options{DataDir: t.TempDir(), APIAddr: "127.0.0.1:0", PeerPort: port, DiscoveryPort: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := n.Start(); err != nil {
+		t.Fatalf("start with busy port: %v", err)
+	}
+	t.Cleanup(n.Stop)
+	var st struct{ PeerPort int }
+	(&peer{node: n}).api(t, "GET", "/api/status", nil, &st)
+	if st.PeerPort == port || st.PeerPort == 0 {
+		t.Fatalf("peer port = %d, want a free port other than %d", st.PeerPort, port)
+	}
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/peer/hello", st.PeerPort))
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("peer API not reachable on reported port: %v", err)
+	}
+	resp.Body.Close()
+}

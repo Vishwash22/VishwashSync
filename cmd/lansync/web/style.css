@@ -13,6 +13,7 @@ header {
 .me { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; }
 #me-name { cursor: pointer; font-weight: 600; }
 #me-id { cursor: pointer; background: #2a3448; padding: .2rem .5rem; border-radius: 4px; font-size: .8rem; }
+#me-port { color: #9aa6bd; font-size: .8rem; }
 main { max-width: 960px; margin: 0 auto; padding: 1rem 1.5rem 3rem; }
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
 h2 { margin: 1.5rem 0 .8rem; font-size: 1.15rem; }

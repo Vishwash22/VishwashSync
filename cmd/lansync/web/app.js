@@ -96,6 +96,7 @@ async function refresh() {
     Object.assign(state, { me, folders, known: devices.known, discovered: devices.discovered });
     $("#me-name").textContent = me.deviceName;
     $("#me-id").textContent = me.deviceID;
+    $("#me-port").textContent = `port ${me.peerPort}`;
     renderFolders();
     renderDevices();
     const log = await api("GET", "/api/log");
