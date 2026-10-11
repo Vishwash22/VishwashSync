@@ -5,6 +5,21 @@ A small Syncthing-style folder sync for your home network. Desktop (Windows, mac
 > **v1 has no encryption or authentication.** Anyone on your network can see shared folder
 > contents. Use it only on a trusted home network.
 
+## Download
+
+Prebuilt programs are in [`dist/`](dist):
+
+| Platform | File |
+|---|---|
+| Android (ARM phones, Android 8+) | `lansync.apk` |
+| Windows (64-bit) | `lansync-windows-amd64.exe` |
+| macOS Apple Silicon / Intel | `lansync-darwin-arm64` / `lansync-darwin-amd64` |
+| Linux x86-64 / ARM64 | `lansync-linux-amd64` / `lansync-linux-arm64` |
+
+The binaries are not code-signed. On macOS/Linux run `chmod +x` on the file first; macOS may need
+right-click → Open the first time, and Windows SmartScreen may ask you to confirm. On Android, allow
+installing from unknown sources.
+
 ## How it works
 
 - Each device runs the same Go core. On desktop it's a background program with a web UI at
