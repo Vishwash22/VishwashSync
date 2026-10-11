@@ -64,6 +64,8 @@ type FolderStatus struct {
 	Bytes     int64     `json:"bytes"`
 	Done      int       `json:"done"`
 	Total     int       `json:"total"`
+	// Waiting names the device we're waiting on to finish receiving; Done/Total are then its progress.
+	Waiting string `json:"waiting,omitempty"`
 }
 
 func New(opts Options) (*Node, error) {
@@ -256,15 +258,19 @@ func (n *Node) loadIndex(id string) map[string]FileInfo {
 	return cp
 }
 
+// storeIndex saves the index. It keeps its own copy, because the caller goes on changing idx
+// while peers read the stored index concurrently.
 func (n *Node) storeIndex(id string, idx map[string]FileInfo) {
 	list := make([]FileInfo, 0, len(idx))
+	stored := make(map[string]FileInfo, len(idx))
 	var bytes int64
-	for _, f := range idx {
+	for k, f := range idx {
 		list = append(list, f)
+		stored[k] = f
 		bytes += f.Size
 	}
 	n.mu.Lock()
-	n.indexes[id] = idx
+	n.indexes[id] = stored
 	s := n.folderStatus(id)
 	s.Files, s.Bytes = len(idx), bytes
 	n.mu.Unlock()

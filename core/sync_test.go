@@ -342,3 +342,47 @@ func TestBrowseFolders(t *testing.T) {
 		t.Errorf("missing folder opened %q, want nearest existing parent %q", res.Path, root)
 	}
 }
+
+// "Sync now" on a send-only device must not report done while the receiving device is still
+// downloading: SyncFolder with notify returns only after the peers have finished.
+func TestSyncNowWaitsForReceivingDevice(t *testing.T) {
+	phone, desktop := startPeer(t, "phone"), startPeer(t, "desktop")
+	link(t, phone, desktop, core.SendOnly, core.ReceiveOnly)
+	big := strings.Repeat("x", 512*1024)
+	for i := 0; i < 30; i++ {
+		write(t, phone.dir, fmt.Sprintf("img%02d.jpg", i), fmt.Sprint(i)+big, t0)
+	}
+	if err := phone.node.SyncFolder("F1", true); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 30; i++ {
+		if got := read(t, desktop.dir, fmt.Sprintf("img%02d.jpg", i)); got != fmt.Sprint(i)+big {
+			t.Fatalf("phone reported done but desktop is missing img%02d.jpg", i)
+		}
+	}
+}
+
+// Pressing Sync now on both devices at once must neither deadlock (each waits for the other)
+// nor race on the index (run with -race).
+func TestBothDevicesSyncAtOnce(t *testing.T) {
+	a, b := startPeer(t, "A"), startPeer(t, "B")
+	link(t, a, b, core.SendReceive, core.SendReceive)
+	write(t, a.dir, "a.txt", "A", t0)
+	write(t, b.dir, "b.txt", "B", t0)
+	done := make(chan error, 2)
+	go func() { done <- a.node.SyncFolder("F1", true) }()
+	go func() { done <- b.node.SyncFolder("F1", true) }()
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("sync did not finish: deadlock")
+		}
+	}
+	if read(t, a.dir, "b.txt") != "B" || read(t, b.dir, "a.txt") != "A" {
+		t.Fatal("not synced")
+	}
+}

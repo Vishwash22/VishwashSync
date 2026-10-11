@@ -55,6 +55,7 @@ function statusText(s) {
   if (s.state === "idle") return "Up to date";
   if (s.state === "error") return "Error";
   if (s.state === "scanning") return "Scanning…";
+  if (s.waiting) return `${s.waiting} is receiving${s.total ? ` ${s.done}/${s.total}` : "…"}`;
   return `Syncing ${s.done}/${s.total}`;
 }
 

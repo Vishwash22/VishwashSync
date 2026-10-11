@@ -89,10 +89,24 @@ func (n *Node) peerHandler() http.Handler {
 		if !ok {
 			return
 		}
+		// Answer only when done, so the requesting device can show "done" truthfully.
 		if f.Mode != SendOnly {
-			go n.SyncFolder(f.ID, false)
+			if err := n.SyncFolder(f.ID, false); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
-		w.WriteHeader(http.StatusAccepted)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("GET /peer/folders/{id}/status", func(w http.ResponseWriter, r *http.Request) {
+		f, ok := n.sharedFolder(w, r)
+		if !ok {
+			return
+		}
+		n.mu.Lock()
+		st := *n.folderStatus(f.ID)
+		n.mu.Unlock()
+		writeJSONResponse(w, st)
 	})
 	return n.rememberCaller(mux)
 }

@@ -179,6 +179,12 @@ func (n *Node) apiHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		// Show the folder as busy right away instead of "Up to date" until the sync starts.
+		n.updateStatus(id, func(s *FolderStatus) {
+			if s.State == "idle" || s.State == "error" {
+				s.State, s.LastError = "scanning", ""
+			}
+		})
 		go n.SyncFolder(id, true)
 		w.WriteHeader(http.StatusAccepted)
 	})

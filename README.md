@@ -28,7 +28,8 @@ installing from unknown sources.
   blocked you can type a device's address (`192.168.1.20:22000`) when adding it.
 - Files are transferred over plain HTTP between devices (port 22000), whole files at a time.
 - Nothing happens automatically: press **Sync now** on a folder. That rescans the folder, pulls
-  changes from every device it's shared with, then asks those devices to sync too.
+  changes from every device it's shared with, then asks those devices to sync too and waits
+  until they've finished (their progress is shown as "*device* is receiving 12/40").
 
 ### Folder modes
 

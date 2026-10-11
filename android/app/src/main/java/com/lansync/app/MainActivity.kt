@@ -445,7 +445,11 @@ private fun FolderCard(f: Api.Folder, remote: String?, onSync: (Api.Folder) -> U
     val (stateText, stateColor) = when (s.state) {
         "idle" -> "Up to date" to Ok
         "scanning" -> "Scanning…" to Warn
-        "syncing" -> "Syncing ${s.done}/${s.total}" to Warn
+        "syncing" -> when {
+            // Short, because it shares a row with the title; the direction line names the device.
+            s.waiting.isNotBlank() -> "Receiving" + (if (s.total > 0) " ${s.done}/${s.total}" else "…")
+            else -> "Syncing ${s.done}/${s.total}"
+        } to Warn
         else -> "Error" to Err
     }
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp)) {

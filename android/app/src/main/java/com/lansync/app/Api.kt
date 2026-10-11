@@ -16,6 +16,7 @@ object Api {
     data class FolderStatus(
         val state: String, val lastSync: String, val lastError: String,
         val files: Int, val bytes: Long, val done: Int, val total: Int,
+        val waiting: String, // device still receiving after this one finished
     )
     data class Folder(
         val id: String, val label: String, val path: String, val mode: String,
@@ -71,6 +72,7 @@ object Api {
             FolderStatus(
                 s.getString("state"), s.optString("lastSync"), s.optString("lastError"),
                 s.optInt("files"), s.optLong("bytes"), s.optInt("done"), s.optInt("total"),
+                s.optString("waiting"),
             ),
         )
     }

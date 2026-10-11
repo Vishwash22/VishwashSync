@@ -11,28 +11,28 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
-var ErrBusy = errors.New("folder is already syncing")
-
 // SyncFolder rescans a folder and pulls changes from every device it is shared with (unless the
-// folder is send-only). With notify, it then asks those devices to sync too, so one press of
-// "Sync now" syncs both directions.
+// folder is send-only). With notify, it then asks those devices to sync too and waits until they
+// have finished, so one press of "Sync now" syncs both directions and only reports done when the
+// other devices are done. If the folder is already syncing, it waits and then syncs again.
 func (n *Node) SyncFolder(id string, notify bool) error {
-	l := n.folderLock(id)
-	if !l.TryLock() {
-		return ErrBusy
-	}
 	f, ok := n.folder(id)
 	if !ok {
-		l.Unlock()
 		return fmt.Errorf("unknown folder %q", id)
 	}
+	l := n.folderLock(id)
+	l.Lock()
 	err := n.syncLocked(f)
-	l.Unlock()
+	l.Unlock() // peers pull from us while we wait for them below
+	if err == nil && notify {
+		err = n.notifyPeers(f)
+	}
 	n.updateStatus(id, func(s *FolderStatus) {
-		s.Done, s.Total = 0, 0
+		s.Done, s.Total, s.Waiting = 0, 0, ""
 		if err != nil {
 			s.State, s.LastError = "error", err.Error()
 		} else {
@@ -44,18 +44,77 @@ func (n *Node) SyncFolder(id string, notify bool) error {
 		return err
 	}
 	n.logf("%s: sync finished", f.Label)
-	if notify {
-		for _, dev := range f.Devices {
-			if addr := n.addrOf(dev); addr != "" {
-				if req, err := n.peerRequest("POST", addr, "/peer/folders/"+url.PathEscape(f.ID)+"/sync-request", nil); err == nil {
-					if resp, err := n.httpClient.Do(req); err == nil {
-						resp.Body.Close()
-					}
-				}
-			}
+	return nil
+}
+
+// notifyPeers asks each device sharing the folder to sync and waits for it to finish, showing
+// that device's progress in this folder's status meanwhile.
+func (n *Node) notifyPeers(f Folder) error {
+	reached := 0
+	var errs []string
+	for _, dev := range f.Devices {
+		addr := n.addrOf(dev)
+		if addr == "" {
+			continue
 		}
+		name := n.deviceName(dev)
+		n.updateStatus(f.ID, func(s *FolderStatus) { s.State, s.Waiting, s.Done, s.Total = "syncing", name, 0, 0 })
+		stop := make(chan struct{})
+		go n.followPeer(f.ID, addr, stop)
+		err := n.requestPeerSync(f.ID, addr)
+		close(stop)
+		if err != nil {
+			n.logf("%s: %s did not finish syncing: %v", f.Label, name, err)
+			errs = append(errs, name+": "+err.Error())
+			continue
+		}
+		reached++
+	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	if reached == 0 && len(f.Devices) > 0 && f.Mode == SendOnly {
+		return errors.New("none of the devices sharing this folder are reachable")
 	}
 	return nil
+}
+
+func (n *Node) requestPeerSync(folderID, addr string) error {
+	req, err := n.peerRequest("POST", addr, "/peer/folders/"+url.PathEscape(folderID)+"/sync-request", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req) // no timeout: the peer may be downloading for a long time
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 1000))
+		return errors.New(strings.TrimSpace(string(msg)))
+	}
+	return nil
+}
+
+// followPeer mirrors the peer's download progress into our folder status until stop is closed.
+func (n *Node) followPeer(folderID, addr string, stop <-chan struct{}) {
+	t := time.NewTicker(700 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
+		var st FolderStatus
+		if n.peerGetJSON(addr, "/peer/folders/"+url.PathEscape(folderID)+"/status", &st) == nil {
+			n.updateStatus(folderID, func(s *FolderStatus) {
+				if s.Waiting != "" {
+					s.Done, s.Total = st.Done, st.Total
+				}
+			})
+		}
+	}
 }
 
 func (n *Node) syncLocked(f Folder) error {
