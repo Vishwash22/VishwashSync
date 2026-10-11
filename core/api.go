@@ -185,6 +185,7 @@ func (n *Node) apiHandler() http.Handler {
 	mux.HandleFunc("GET /api/offers", func(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, n.offers())
 	})
+	mux.HandleFunc("GET /api/browse", n.handleBrowse)
 	mux.HandleFunc("GET /api/log", func(w http.ResponseWriter, r *http.Request) {
 		n.mu.Lock()
 		lines := append([]string{}, n.logLines...)

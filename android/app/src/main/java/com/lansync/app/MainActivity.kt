@@ -358,21 +358,28 @@ private fun FoldersScreen(
                 }
             }
         }
-        items(ui.offers, key = { "offer-" + it.deviceID + it.folderID }) { o ->
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E6))) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("${o.deviceName} wants to share “${o.label}”", fontWeight = FontWeight.SemiBold)
-                        Text("Folder ID ${o.folderID}", fontSize = 12.sp, color = Color.Gray)
-                    }
-                    Button(onClick = { onAccept(o) }) { Text("Accept") }
-                }
-            }
-        }
-        if (ui.folders.isEmpty()) {
+        val groups = folderGroups(ui)
+        if (groups.isEmpty()) {
             item { Text("No folders yet. Tap + to add one, or accept a folder another device offers.", Modifier.padding(8.dp), color = Color.Gray) }
         }
-        items(ui.folders, key = { it.id }) { f -> FolderCard(f, ui, onSync, onEdit, onRemove = { confirmRemove = f }) }
+        // One section per device pair, e.g. "Vishwash's laptop ⇄ This phone".
+        groups.forEach { g ->
+            item(key = "group-" + g.key) { GroupHeader(g, ui, onSyncAll = { g.folders.forEach(onSync) }) }
+            items(g.offers, key = { "offer-" + it.deviceID + it.folderID }) { o ->
+                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E6))) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${o.deviceName} wants to share “${o.label}”", fontWeight = FontWeight.SemiBold)
+                            Text("Accept it to choose where to keep it on this phone.", fontSize = 12.sp, color = Color.Gray)
+                        }
+                        Button(onClick = { onAccept(o) }) { Text("Accept") }
+                    }
+                }
+            }
+            items(g.folders, key = { it.id }) { f ->
+                FolderCard(f, g.devices.joinToString(" + ") { ui.deviceName(it) }.ifEmpty { null }, onSync, onEdit, onRemove = { confirmRemove = f })
+            }
+        }
     }
     confirmRemove?.let { f ->
         AlertDialog(
@@ -385,8 +392,54 @@ private fun FoldersScreen(
     }
 }
 
+private class FolderGroup(val key: String, val devices: List<String>) {
+    val folders = mutableListOf<Api.Folder>()
+    val offers = mutableListOf<Api.Offer>()
+}
+
+/** Groups folders (and pending offers) by the set of devices they're shared with. */
+private fun folderGroups(ui: UiState): List<FolderGroup> {
+    val groups = linkedMapOf<String, FolderGroup>()
+    fun group(ids: List<String>): FolderGroup {
+        val devices = ids.sorted()
+        val key = devices.joinToString(",")
+        return groups.getOrPut(key) { FolderGroup(key, devices) }
+    }
+    ui.folders.forEach { group(it.devices).folders.add(it) }
+    ui.offers.forEach { group(listOf(it.deviceID)).offers.add(it) }
+    return groups.values.sortedWith(
+        compareBy<FolderGroup> { it.devices.isEmpty() }.thenBy { g -> g.devices.joinToString { ui.deviceName(it) } }
+    )
+}
+
 @Composable
-private fun FolderCard(f: Api.Folder, ui: UiState, onSync: (Api.Folder) -> Unit, onEdit: (Api.Folder) -> Unit, onRemove: () -> Unit) {
+private fun GroupHeader(g: FolderGroup, ui: UiState, onSyncAll: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (g.devices.isEmpty()) {
+            Text("Not shared with any device yet", fontWeight = FontWeight.SemiBold, color = Color.Gray, modifier = Modifier.weight(1f))
+            return@Row
+        }
+        val online = g.devices.all { id -> ui.devices.known.any { it.id == id && it.online } }
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(9.dp).clip(CircleShape).background(if (online) Ok else Color(0xFFC3C8D2)))
+                Spacer(Modifier.width(8.dp))
+                Text(g.devices.joinToString(" + ") { ui.deviceName(it) }, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            Text("⇄  This phone · ${ui.status?.deviceName ?: ""}", fontSize = 13.sp, color = Accent, modifier = Modifier.padding(start = 17.dp))
+        }
+        if (g.folders.isNotEmpty()) OutlinedButton(onClick = onSyncAll) { Text("Sync all") }
+    }
+}
+
+private fun direction(f: Api.Folder, remote: String) = when (f.mode) {
+    "sendonly" -> "This phone → $remote"
+    "receiveonly" -> "$remote → This phone"
+    else -> "This phone ⇄ $remote"
+}
+
+@Composable
+private fun FolderCard(f: Api.Folder, remote: String?, onSync: (Api.Folder) -> Unit, onEdit: (Api.Folder) -> Unit, onRemove: () -> Unit) {
     val s = f.status
     val busy = s.state == "scanning" || s.state == "syncing"
     val (stateText, stateColor) = when (s.state) {
@@ -407,9 +460,9 @@ private fun FolderCard(f: Api.Folder, ui: UiState, onSync: (Api.Folder) -> Unit,
                 Spacer(Modifier.width(8.dp))
                 Text(stateText, color = stateColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
-            Text(f.path, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
-            val shared = if (f.devices.isEmpty()) "nobody yet" else f.devices.joinToString { ui.deviceName(it) }
-            Text("${s.files} files · ${size(s.bytes)} · last sync ${ago(s.lastSync)} · shared with $shared", fontSize = 12.sp, color = Color.Gray)
+            if (remote != null) Text(direction(f, remote), fontSize = 13.sp, color = Accent, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 2.dp))
+            Text(f.path, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 2.dp))
+            Text("${s.files} files · ${size(s.bytes)} · last sync ${ago(s.lastSync)}", fontSize = 12.sp, color = Color.Gray)
             if (s.lastError.isNotBlank()) Text(s.lastError, fontSize = 12.sp, color = Err)
             if (s.state == "syncing" && s.total > 0) {
                 LinearProgressIndicator(progress = { s.done.toFloat() / s.total }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), color = Warn)

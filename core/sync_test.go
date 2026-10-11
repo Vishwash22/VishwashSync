@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -307,5 +308,37 @@ func TestRenamedDeviceUpdatesOnPeers(t *testing.T) {
 	b.api(t, "GET", "/api/devices", nil, &devs)
 	if len(devs.Known) != 1 || devs.Known[0].Name != "Living room PC" {
 		t.Errorf("B sees A as %+v, want name %q", devs.Known, "Living room PC")
+	}
+}
+
+// The web UI's folder picker lists subfolders, and opens the nearest existing parent for a
+// suggested folder that doesn't exist yet.
+func TestBrowseFolders(t *testing.T) {
+	p := startPeer(t, "A")
+	root := t.TempDir()
+	os.Mkdir(filepath.Join(root, "Photos"), 0o755)
+	os.Mkdir(filepath.Join(root, "docs"), 0o755)
+	os.Mkdir(filepath.Join(root, ".hidden"), 0o755)
+	write(t, root, "file.txt", "x", t0)
+
+	var res struct {
+		Path string
+		Dirs []struct{ Name, Path string }
+	}
+	p.api(t, "GET", "/api/browse?path="+url.QueryEscape(root), nil, &res)
+	var names []string
+	for _, d := range res.Dirs {
+		names = append(names, d.Name)
+	}
+	if strings.Join(names, ",") != "docs,Photos" {
+		t.Errorf("dirs = %v, want [docs Photos] (folders only, no hidden, case-insensitive order)", names)
+	}
+	if len(res.Dirs) == 2 && res.Dirs[1].Path != filepath.Join(root, "Photos") {
+		t.Errorf("path = %q", res.Dirs[1].Path)
+	}
+
+	p.api(t, "GET", "/api/browse?path="+url.QueryEscape(filepath.Join(root, "LanSync", "Books")), nil, &res)
+	if res.Path != root {
+		t.Errorf("missing folder opened %q, want nearest existing parent %q", res.Path, root)
 	}
 }
