@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LanSync</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">⇄ LanSync</div>
+    <div class="me">
+      <span id="me-name" title="Click to rename this device"></span>
+      <code id="me-id" title="Click to copy this device's ID"></code>
+    </div>
+  </header>
+
+  <main>
+    <section id="offers"></section>
+
+    <section>
+      <div class="section-head">
+        <h2>Folders</h2>
+        <button class="primary" id="add-folder">+ Add folder</button>
+      </div>
+      <div id="folders" class="cards"></div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Devices</h2>
+        <div>
+          <button id="refresh-devices">↻ Look for devices</button>
+          <button class="primary" id="add-device">+ Add device</button>
+        </div>
+      </div>
+      <div id="devices" class="cards"></div>
+      <h3>Discovered on this network</h3>
+      <div id="discovered" class="cards"></div>
+    </section>
+
+    <section>
+      <details>
+        <summary>Activity log</summary>
+        <pre id="log"></pre>
+      </details>
+    </section>
+  </main>
+
+  <dialog id="folder-dialog">
+    <form method="dialog" id="folder-form">
+      <h3 id="folder-title">Add folder</h3>
+      <label>Label <input name="label" placeholder="Photos"></label>
+      <label>Folder path on this device <input name="path" required placeholder="/home/me/Photos"></label>
+      <label>Folder ID <input name="id" placeholder="generated automatically"></label>
+      <fieldset>
+        <legend>Sync mode</legend>
+        <label class="radio"><input type="radio" name="mode" value="sendreceive" checked> <b>Send &amp; receive</b> <small>changes go both ways</small></label>
+        <label class="radio"><input type="radio" name="mode" value="sendonly"> <b>Send only</b> <small>this device's changes go out, nothing comes in</small></label>
+        <label class="radio"><input type="radio" name="mode" value="receiveonly"> <b>Receive only</b> <small>changes come in; local edits stay here</small></label>
+      </fieldset>
+      <fieldset>
+        <legend>Share with</legend>
+        <div id="folder-devices"></div>
+      </fieldset>
+      <p class="error" id="folder-error"></p>
+      <menu>
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button class="primary" value="save">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="device-dialog">
+    <form method="dialog" id="device-form">
+      <h3>Add device</h3>
+      <label>Device ID <input name="id" required placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX"></label>
+      <label>Name <input name="name" placeholder="My phone"></label>
+      <label>Address <small>(optional, only if it isn't discovered automatically)</small> <input name="addr" placeholder="192.168.1.20:22000"></label>
+      <p class="error" id="device-error"></p>
+      <menu>
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button class="primary" value="save">Add</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

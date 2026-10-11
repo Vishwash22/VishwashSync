@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Orb setup for LanSync: Go toolchain, JDK 17 and the Android SDK/NDK (for gomobile + Gradle).
+set -euo pipefail
+
+GO_VERSION=go1.27.2
+ANDROID_HOME="$HOME/android-sdk"
+NDK_VERSION=27.2.12479018
+
+step() { echo "==> $* ($(date +%T))"; }
+
+if [ "$(/usr/local/go/bin/go version 2>/dev/null | awk '{print $3}')" != "$GO_VERSION" ]; then
+	step "installing $GO_VERSION"
+	curl -fsSL "https://go.dev/dl/$GO_VERSION.linux-amd64.tar.gz" -o /tmp/go.tgz
+	sudo rm -rf /usr/local/go
+	sudo tar -C /usr/local -xzf /tmp/go.tgz
+	rm /tmp/go.tgz
+fi
+
+if ! dpkg -s openjdk-17-jdk-headless unzip >/dev/null 2>&1; then
+	step "installing JDK 17"
+	sudo apt-get update -qq
+	sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openjdk-17-jdk-headless unzip
+fi
+
+if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+	step "installing Android command-line tools"
+	mkdir -p "$ANDROID_HOME/cmdline-tools"
+	curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/clt.zip
+	rm -rf /tmp/clt && unzip -q /tmp/clt.zip -d /tmp/clt
+	mv /tmp/clt/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+	rm -rf /tmp/clt /tmp/clt.zip
+fi
+
+if [ ! -d "$ANDROID_HOME/ndk/$NDK_VERSION" ] || [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
+	step "installing Android SDK packages"
+	yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+	"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;$NDK_VERSION" >/dev/null
+fi
+
+marker="# LanSync toolchain"
+if ! grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
+	cat >>"$HOME/.bash_profile" <<EOF
+
+$marker
+export ANDROID_HOME="$ANDROID_HOME"
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH="/usr/local/go/bin:\$HOME/go/bin:\$PATH"
+EOF
+fi
+
+step "downloading Go modules"
+/usr/local/go/bin/go mod download
+step "done"

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple vector launcher icon: two arrows on a blue tile. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#2F6FED"
+        android:pathData="M24,14h60a10,10 0,0 1,10 10v60a10,10 0,0 1,-10 10h-60a10,10 0,0 1,-10 -10v-60a10,10 0,0 1,10 -10z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,36h32v-8l14,12 -14,12v-8h-32z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M74,70h-32v8l-14,-12 14,-12v8h32z" />
+</vector>
