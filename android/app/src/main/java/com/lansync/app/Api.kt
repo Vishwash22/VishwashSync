@@ -12,7 +12,7 @@ import java.net.URLEncoder
 object Api {
     private const val BASE = "http://127.0.0.1:8384"
 
-    data class Status(val deviceID: String, val deviceName: String)
+    data class Status(val deviceID: String, val deviceName: String, val nameSet: Boolean)
     data class FolderStatus(
         val state: String, val lastSync: String, val lastError: String,
         val files: Int, val bytes: Long, val done: Int, val total: Int,
@@ -56,7 +56,7 @@ object Api {
     )
 
     suspend fun status(): Status = JSONObject(call("GET", "/api/status")).let {
-        Status(it.getString("deviceID"), it.getString("deviceName"))
+        Status(it.getString("deviceID"), it.getString("deviceName"), it.optBoolean("nameSet"))
     }
 
     suspend fun setDeviceName(name: String) {

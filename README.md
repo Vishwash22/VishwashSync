@@ -69,7 +69,9 @@ notifications and **All files access** (needed to sync arbitrary folders).
 
 ## Using it
 
-1. Start LanSync on two devices on the same Wi-Fi.
+1. Start LanSync on two devices on the same Wi-Fi. The first time, give each a name you'll
+   recognise (e.g. "Vishwash's laptop"); you can change it later with **Rename**. Other devices
+   pick up the new name automatically.
 2. On each, open **Devices** and add the other one (it shows up under *Discovered*, or add it by ID).
 3. On one device, **Add folder**, pick the mode and tick the other device under *Share with*.
 4. The other device shows "*X wants to share …*" — accept it, choose a local path and mode.

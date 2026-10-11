@@ -10,7 +10,8 @@
   <header>
     <div class="brand">⇄ LanSync</div>
     <div class="me">
-      <span id="me-name" title="Click to rename this device"></span>
+      <span id="me-name"></span>
+      <button class="ghost" id="rename">✎ Rename</button>
       <code id="me-id" title="Click to copy this device's ID"></code>
       <span id="me-port" title="Other devices connect to this port"></span>
     </div>
@@ -82,6 +83,19 @@
       <menu>
         <button value="cancel" formnovalidate>Cancel</button>
         <button class="primary" value="save">Add</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="name-dialog">
+    <form method="dialog" id="name-form">
+      <h3 id="name-title">Name this device</h3>
+      <p class="help">This name is shown on your other devices, so pick one you'll recognise, like “Vishwash's laptop”.</p>
+      <label>Device name <input name="deviceName" required maxlength="64" autocomplete="off"></label>
+      <p class="error" id="name-error"></p>
+      <menu>
+        <button value="cancel" formnovalidate id="name-cancel">Cancel</button>
+        <button class="primary" value="save">Save</button>
       </menu>
     </form>
   </dialog>

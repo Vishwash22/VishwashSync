@@ -173,10 +173,28 @@ $("#add-folder").onclick = () => openFolderDialog({}, true);
 $("#add-device").onclick = () => { $("#device-form").reset(); $("#device-error").textContent = ""; $("#device-dialog").showModal(); };
 $("#refresh-devices").onclick = async () => { await api("POST", "/api/discover"); setTimeout(refresh, 800); refreshOffers(); };
 $("#me-id").onclick = () => navigator.clipboard?.writeText(state.me.deviceID);
-$("#me-name").onclick = async () => {
-  const name = prompt("Name for this device", state.me.deviceName);
-  if (name) { await api("PUT", "/api/status", { deviceName: name }); refresh(); }
-};
+// ---- device name ----
+function openNameDialog(firstRun) {
+  const form = $("#name-form");
+  $("#name-title").textContent = firstRun ? "Name this device" : "Rename this device";
+  $("#name-cancel").textContent = firstRun ? "Later" : "Cancel";
+  $("#name-error").textContent = "";
+  form.elements.deviceName.value = state.me.deviceName || "";
+  $("#name-dialog").showModal();
+  form.elements.deviceName.select();
+}
+$("#rename").onclick = () => openNameDialog(false);
+$("#name-form").addEventListener("submit", async (ev) => {
+  if (ev.submitter?.value !== "save") return;
+  ev.preventDefault();
+  try {
+    await api("PUT", "/api/status", { deviceName: ev.target.elements.deviceName.value });
+    $("#name-dialog").close();
+    refresh();
+  } catch (e) {
+    $("#name-error").textContent = e.message;
+  }
+});
 
 document.body.addEventListener("click", async (ev) => {
   const b = ev.target.closest("button");
@@ -202,7 +220,10 @@ document.body.addEventListener("click", async (ev) => {
   }
 });
 
-refresh();
+let askedName = false;
+refresh().then(() => {
+  if (!state.me.nameSet && !askedName) { askedName = true; openNameDialog(true); }
+});
 refreshOffers();
 setInterval(refresh, 2000);
 setInterval(refreshOffers, 15000);

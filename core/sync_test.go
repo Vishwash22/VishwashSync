@@ -286,3 +286,26 @@ func TestBusyPeerPortFallsBack(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+// A device's chosen name replaces the name other devices saved for it.
+func TestRenamedDeviceUpdatesOnPeers(t *testing.T) {
+	a, b := startPeer(t, "A"), startPeer(t, "B")
+	link(t, a, b, core.SendReceive, core.SendReceive)
+	var st struct{ NameSet bool }
+	a.api(t, "GET", "/api/status", nil, &st)
+	if st.NameSet {
+		t.Fatal("nameSet should be false before the user picks a name")
+	}
+
+	a.api(t, "PUT", "/api/status", map[string]string{"deviceName": "Living room PC"}, nil)
+	a.api(t, "GET", "/api/status", nil, &st)
+	if !st.NameSet {
+		t.Error("nameSet should be true after renaming")
+	}
+	syncNow(t, a) // A contacts B, which learns the new name
+	var devs struct{ Known []struct{ ID, Name string } }
+	b.api(t, "GET", "/api/devices", nil, &devs)
+	if len(devs.Known) != 1 || devs.Known[0].Name != "Living room PC" {
+		t.Errorf("B sees A as %+v, want name %q", devs.Known, "Living room PC")
+	}
+}

@@ -51,6 +51,7 @@ func (f Folder) sharedWith(id string) bool {
 type Config struct {
 	DeviceID   string   `json:"deviceID"`
 	DeviceName string   `json:"deviceName"`
+	NameSet    bool     `json:"nameSet,omitempty"` // the user has chosen the name (not just the default)
 	Devices    []Device `json:"devices"`
 	Folders    []Folder `json:"folders"`
 }

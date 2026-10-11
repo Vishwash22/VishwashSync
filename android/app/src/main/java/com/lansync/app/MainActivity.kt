@@ -190,6 +190,7 @@ private fun App(storageGranted: Boolean, onGrantStorage: () -> Unit, onQuit: () 
     var folderDraft by remember { mutableStateOf<FolderDraft?>(null) }
     var showAddDevice by remember { mutableStateOf<Api.Device?>(null) }
     var showRename by remember { mutableStateOf(false) }
+    var firstRunName by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
 
     // Run an API action, show its error, refresh afterwards.
@@ -201,6 +202,14 @@ private fun App(storageGranted: Boolean, onGrantStorage: () -> Unit, onQuit: () 
                 snackbar.showSnackbar(e.message ?: "Something went wrong")
             }
             ui.refresh()
+        }
+    }
+
+    // First start: ask the user to name this phone so it's easy to recognise on other devices.
+    LaunchedEffect(ui.status?.nameSet) {
+        if (ui.status?.nameSet == false && !firstRunName) {
+            firstRunName = true
+            showRename = true
         }
     }
 
@@ -268,6 +277,7 @@ private fun App(storageGranted: Boolean, onGrantStorage: () -> Unit, onQuit: () 
                 )
             } else {
                 DevicesScreen(ui,
+                    onRename = { showRename = true },
                     onAddDiscovered = { d -> act { Api.addDevice(d.id, d.name, ""); ui.refreshOffers() } },
                     onRemove = { d -> act { Api.removeDevice(d.id) } },
                 )
@@ -304,13 +314,21 @@ private fun App(storageGranted: Boolean, onGrantStorage: () -> Unit, onQuit: () 
         })
     }
     if (showRename) {
+        val firstRun = ui.status?.nameSet == false
         var name by remember { mutableStateOf(ui.status?.deviceName ?: "") }
         AlertDialog(
             onDismissRequest = { showRename = false },
-            title = { Text("Rename this device") },
-            text = { OutlinedTextField(name, { name = it }, singleLine = true, label = { Text("Name") }) },
-            confirmButton = { TextButton(onClick = { showRename = false; act { Api.setDeviceName(name) } }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { showRename = false }) { Text("Cancel") } },
+            title = { Text(if (firstRun) "Name this device" else "Rename this device") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("This name is shown on your other devices, so pick one you'll recognise, like “Vishwash's phone”.", fontSize = 14.sp, color = Color.DarkGray)
+                    OutlinedTextField(name, { if (it.length <= 64) name = it }, singleLine = true, label = { Text("Device name") }, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showRename = false; act { Api.setDeviceName(name) } }, enabled = name.isNotBlank()) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showRename = false }) { Text(if (firstRun) "Later" else "Cancel") } },
         )
     }
 }
@@ -406,7 +424,7 @@ private fun FolderCard(f: Api.Folder, ui: UiState, onSync: (Api.Folder) -> Unit,
 }
 
 @Composable
-private fun DevicesScreen(ui: UiState, onAddDiscovered: (Api.Device) -> Unit, onRemove: (Api.Device) -> Unit) {
+private fun DevicesScreen(ui: UiState, onRename: () -> Unit, onAddDiscovered: (Api.Device) -> Unit, onRemove: (Api.Device) -> Unit) {
     val context = LocalContext.current
     var confirmRemove by remember { mutableStateOf<Api.Device?>(null) }
     LazyColumn(contentPadding = PaddingValues(12.dp, 12.dp, 12.dp, 88.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -418,6 +436,7 @@ private fun DevicesScreen(ui: UiState, onAddDiscovered: (Api.Device) -> Unit, on
                         Text(me.deviceName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         Text(me.deviceID, color = Color(0xFFCFD6E4), fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+                            TextButton(onClick = onRename) { Text("Rename", color = Color.White) }
                             TextButton(onClick = { copy(context, me.deviceID) }) { Text("Copy ID", color = Color.White) }
                             TextButton(onClick = {
                                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, me.deviceID), "Share device ID"))

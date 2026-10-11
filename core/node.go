@@ -309,4 +309,13 @@ func (n *Node) markSeen(id, name, addr string) {
 		return
 	}
 	n.seen[id] = seenDevice{Name: name, Addr: addr, LastSeen: time.Now()}
+	// Known devices show the name they chose for themselves, so renaming a device updates it everywhere.
+	for i, d := range n.cfg.Devices {
+		if d.ID == id && name != "" && d.Name != name {
+			n.cfg.Devices[i].Name = name
+			if err := n.saveConfigLocked(); err != nil {
+				log.Printf("save config: %v", err)
+			}
+		}
+	}
 }

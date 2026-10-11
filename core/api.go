@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // Local REST API for the UIs. It listens on loopback only.
@@ -40,7 +41,7 @@ func (n *Node) apiHandler() http.Handler {
 	mux.HandleFunc("GET /api/status", func(w http.ResponseWriter, r *http.Request) {
 		n.mu.Lock()
 		defer n.mu.Unlock()
-		writeJSONResponse(w, map[string]any{"deviceID": n.cfg.DeviceID, "deviceName": n.cfg.DeviceName, "peerPort": n.opts.PeerPort})
+		writeJSONResponse(w, map[string]any{"deviceID": n.cfg.DeviceID, "deviceName": n.cfg.DeviceName, "nameSet": n.cfg.NameSet, "peerPort": n.opts.PeerPort})
 	})
 	mux.HandleFunc("PUT /api/status", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ DeviceName string }
@@ -48,14 +49,15 @@ func (n *Node) apiHandler() http.Handler {
 			return
 		}
 		name := strings.TrimSpace(req.DeviceName)
-		if name == "" {
-			httpError(w, errors.New("device name is required"))
+		if name == "" || utf8.RuneCountInString(name) > 64 {
+			httpError(w, errors.New("device name must be 1 to 64 characters"))
 			return
 		}
 		n.mu.Lock()
-		n.cfg.DeviceName = name
+		n.cfg.DeviceName, n.cfg.NameSet = name, true
 		err := n.saveConfigLocked()
 		n.mu.Unlock()
+		n.Announce() // let other devices pick up the new name right away
 		reply(w, err)
 	})
 	mux.HandleFunc("GET /api/devices", func(w http.ResponseWriter, r *http.Request) {
