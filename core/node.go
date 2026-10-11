@@ -89,7 +89,7 @@ func New(opts Options) (*Node, error) {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Node{
+	n := &Node{
 		opts:       opts,
 		cfg:        cfg,
 		seen:       map[string]seenDevice{},
@@ -99,7 +99,41 @@ func New(opts Options) (*Node, error) {
 		ctx:        ctx,
 		cancel:     cancel,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
-	}, nil
+	}
+	n.restoreStatus()
+	return n, nil
+}
+
+func (n *Node) lastSyncPath() string { return filepath.Join(n.opts.DataDir, "last-sync.json") }
+
+// restoreStatus fills in each folder's file count and size from its saved index, and its last sync
+// time from last-sync.json, so the UI shows them right after a restart.
+func (n *Node) restoreStatus() {
+	var last map[string]time.Time
+	readJSON(n.lastSyncPath(), &last) // missing on first run
+	for _, f := range n.cfg.Folders {
+		idx := n.loadIndex(f.ID)
+		var bytes int64
+		for _, fi := range idx {
+			bytes += fi.Size
+		}
+		n.updateStatus(f.ID, func(s *FolderStatus) { s.Files, s.Bytes, s.LastSync = len(idx), bytes, last[f.ID] })
+	}
+}
+
+// saveLastSync persists the last successful sync time of every folder.
+func (n *Node) saveLastSync() {
+	n.mu.Lock()
+	defer n.mu.Unlock() // held while writing so concurrent folder syncs don't interleave writes
+	last := map[string]time.Time{}
+	for _, f := range n.cfg.Folders {
+		if s, ok := n.status[f.ID]; ok && !s.LastSync.IsZero() {
+			last[f.ID] = s.LastSync
+		}
+	}
+	if err := writeJSON(n.lastSyncPath(), last); err != nil {
+		log.Printf("save last sync times: %v", err)
+	}
 }
 
 // Start opens the peer API, the local API and discovery.

@@ -18,9 +18,10 @@ import (
 
 // peer is one running node with its synced folder at dir.
 type peer struct {
-	node *core.Node
-	port int
-	dir  string
+	node    *core.Node
+	port    int
+	dir     string
+	dataDir string
 }
 
 func freePort(t *testing.T) int {
@@ -35,7 +36,8 @@ func freePort(t *testing.T) int {
 func startPeer(t *testing.T, name string) *peer {
 	t.Helper()
 	port := freePort(t)
-	n, err := core.New(core.Options{DataDir: t.TempDir(), DefaultName: name, APIAddr: "127.0.0.1:0", PeerPort: port, DiscoveryPort: -1})
+	dataDir := t.TempDir()
+	n, err := core.New(core.Options{DataDir: dataDir, DefaultName: name, APIAddr: "127.0.0.1:0", PeerPort: port, DiscoveryPort: -1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +45,7 @@ func startPeer(t *testing.T, name string) *peer {
 		t.Fatal(err)
 	}
 	t.Cleanup(n.Stop)
-	return &peer{node: n, port: port, dir: t.TempDir()}
+	return &peer{node: n, port: port, dir: t.TempDir(), dataDir: dataDir}
 }
 
 func (p *peer) api(t *testing.T, method, path string, body any, out any) {
@@ -384,5 +386,40 @@ func TestBothDevicesSyncAtOnce(t *testing.T) {
 	}
 	if read(t, a.dir, "b.txt") != "B" || read(t, b.dir, "a.txt") != "A" {
 		t.Fatal("not synced")
+	}
+}
+
+// After a restart a folder still shows its file count, size and last sync time.
+func TestFolderStatsSurviveRestart(t *testing.T) {
+	phone, desktop := startPeer(t, "phone"), startPeer(t, "desktop")
+	link(t, phone, desktop, core.SendOnly, core.ReceiveOnly)
+	write(t, phone.dir, "a.jpg", "12345", t0)
+	write(t, phone.dir, "b.jpg", "678", t0)
+	syncNow(t, desktop)
+	desktop.node.Stop()
+
+	dataDir := desktop.dataDir
+	n, err := core.New(core.Options{DataDir: dataDir, APIAddr: "127.0.0.1:0", PeerPort: freePort(t), DiscoveryPort: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := n.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(n.Stop)
+	var folders []struct {
+		Status struct {
+			Files    int
+			Bytes    int64
+			LastSync time.Time
+		}
+	}
+	(&peer{node: n}).api(t, "GET", "/api/folders", nil, &folders)
+	if len(folders) != 1 {
+		t.Fatalf("folders = %+v", folders)
+	}
+	s := folders[0].Status
+	if s.Files != 2 || s.Bytes != 8 || time.Since(s.LastSync) > time.Minute {
+		t.Errorf("after restart status = %+v, want 2 files, 8 bytes, last sync just now", s)
 	}
 }

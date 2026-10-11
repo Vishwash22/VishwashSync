@@ -43,6 +43,7 @@ func (n *Node) SyncFolder(id string, notify bool) error {
 		n.logf("%s: sync failed: %v", f.Label, err)
 		return err
 	}
+	n.saveLastSync()
 	n.logf("%s: sync finished", f.Label)
 	return nil
 }
